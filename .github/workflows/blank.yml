@@ -1,410 +1,62 @@
-"PC Virtual Games"
-
-class PCVirtualGames:
-    def __init__(self, root):
-        self.root = root
-        self.root.title(APP_NAME)
-        self.root.geometry("760x560")
-        self.root.minsize(700, 500)
-
-        self.process = None
-
-        self.base_dir = os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__))
-        )
-        self.config_file = os.path.join(self.base_dir, "config.json")
-
-        self.load_config()
-        self.create_interface()
-
-    def load_config(self):
-        try:
-            with open(self.config_file, "r", encoding="utf-8") as file:
-                self.config = json.load(file)
-        except Exception:
-            self.config = {
-                "qemu": "qemu-system-x86_64.exe",
-                "disk": "pc_virtual_games.qcow2",
-                "iso": "Windows.iso",
-                "memory_mb": 8192,
-                "cpus": 4
-            }
-
-    def save_config(self):
-        self.config["disk"] = self.disk_var.get()
-        self.config["iso"] = self.iso_var.get()
-        self.config["memory_mb"] = int(self.ram_var.get())
-        self.config["cpus"] = int(self.cpu_var.get())
-
-        with open(self.config_file, "w", encoding="utf-8") as file:
-            json.dump(self.config, file, indent=4)
-
-    def create_interface(self):
-        main = ttk.Frame(self.root, padding=20)
-        main.pack(fill="both", expand=True)
-
-        title = ttk.Label(
-            main,
-            text=APP_NAME,
-            font=("Segoe UI", 25, "bold")
-        )
-        title.pack(pady=(0, 5))
-
-        subtitle = ttk.Label(
-            main,
-            text="Máquina virtual Windows para jogos",
-            font=("Segoe UI", 11)
-        )
-        subtitle.pack(pady=(0, 20))
-
-        settings = ttk.LabelFrame(
-            main,
-            text="Configuração da máquina virtual",
-            padding=15
-        )
-        settings.pack(fill="x")
-
-        self.disk_var = tk.StringVar(value=self.config["disk"])
-        self.iso_var = tk.StringVar(value=self.config["iso"])
-
-        self.ram_var = tk.IntVar(
-            value=self.config.get("memory_mb", 8192)
-        )
-
-        self.cpu_var = tk.IntVar(
-            value=self.config.get("cpus", 4)
-        )
-
-        self.create_path_row(
-            settings,
-            "Disco virtual:",
-            self.disk_var,
-            0
-        )
-
-        self.create_path_row(
-            settings,
-            "ISO do Windows:",
-            self.iso_var,
-            1
-        )
-
-        ttk.Label(
-            settings,
-            text="Memória RAM (MB):"
-        ).grid(row=2, column=0, sticky="w", pady=8)
-
-        ttk.Spinbox(
-            settings,
-            from_=2048,
-            to=131072,
-            increment=1024,
-            textvariable=self.ram_var,
-            width=15
-        ).grid(row=2, column=1, sticky="w")
-
-        ttk.Label(
-            settings,
-            text="CPUs virtuais:"
-        ).grid(row=3, column=0, sticky="w", pady=8)
-
-        ttk.Spinbox(
-            settings,
-            from_=1,
-            to=64,
-            textvariable=self.cpu_var,
-            width=15
-        ).grid(row=3, column=1, sticky="w")
-
-        buttons = ttk.Frame(main)
-        buttons.pack(pady=20)
-
-        ttk.Button(
-            buttons,
-            text="▶ Iniciar PC Virtual",
-            command=self.start_vm
-        ).grid(row=0, column=0, padx=5)
-
-        ttk.Button(
-            buttons,
-            text="■ Parar",
-            command=self.stop_vm
-        ).grid(row=0, column=1, padx=5)
-
-        ttk.Button(
-            buttons,
-            text="Salvar",
-            command=self.save
-        ).grid(row=0, column=2, padx=5)
-
-        status_frame = ttk.LabelFrame(
-            main,
-            text="Status",
-            padding=10
-        )
-        status_frame.pack(fill="x")
-
-        self.status_var = tk.StringVar(
-            value="Pronto para iniciar"
-        )
-
-        ttk.Label(
-            status_frame,
-            textvariable=self.status_var
-        ).pack(anchor="w")
-
-        log_frame = ttk.LabelFrame(
-            main,
-            text="Console",
-            padding=5
-        )
-        log_frame.pack(fill="both", expand=True, pady=(15, 0))
-
-        self.log = tk.Text(
-            log_frame,
-            height=10,
-            state="disabled",
-            font=("Consolas", 9)
-        )
-
-        self.log.pack(
-            side="left",
-            fill="both",
-            expand=True
-        )
-
-        scrollbar = ttk.Scrollbar(
-            log_frame,
-            command=self.log.yview
-        )
-
-        scrollbar.pack(side="right", fill="y")
-
-        self.log.configure(
-            yscrollcommand=scrollbar.set
-        )
-
-    def create_path_row(
-        self,
-        parent,
-        label,
-        variable,
-        row
-    ):
-        ttk.Label(
-            parent,
-            text=label
-        ).grid(
-            row=row,
-            column=0,
-            sticky="w",
-            pady=8
-        )
-
-        ttk.Entry(
-            parent,
-            textvariable=variable,
-            width=55
-        ).grid(
-            row=row,
-            column=1,
-            sticky="ew"
-        )
-
-        ttk.Button(
-            parent,
-            text="Procurar",
-            command=lambda: self.select_file(variable)
-        ).grid(
-            row=row,
-            column=2,
-            padx=5
-        )
-
-        parent.columnconfigure(1, weight=1)
-
-    def select_file(self, variable):
-        filename = filedialog.askopenfilename()
-
-        if filename:
-            variable.set(filename)
-
-    def write_log(self, message):
-        self.log.configure(state="normal")
-        self.log.insert("end", message + "\n")
-        self.log.see("end")
-        self.log.configure(state="disabled")
-
-    def save(self):
-        try:
-            self.save_config()
-
-            self.status_var.set(
-                "Configuração salva"
-            )
-
-            self.write_log(
-                "Configuração salva."
-            )
-
-        except Exception as error:
-            messagebox.showerror(
-                APP_NAME,
-                str(error)
-            )
-
-    def start_vm(self):
-        if (
-            self.process
-            and self.process.poll() is None
-        ):
-            messagebox.showinfo(
-                APP_NAME,
-                "A máquina virtual já está executando."
-            )
-            return
-
-        self.save()
-
-        qemu = self.config.get(
-            "qemu",
-            "qemu-system-x86_64.exe"
-        )
-
-        disk = self.disk_var.get()
-        iso = self.iso_var.get()
-
-        command = [
-            qemu,
-
-            "-name",
-            APP_NAME,
-
-            "-machine",
-            "q35,accel=whpx",
-
-            "-cpu",
-            "host",
-
-            "-smp",
-            str(self.cpu_var.get()),
-
-            "-m",
-            str(self.ram_var.get()),
-
-            "-drive",
-            f"file={disk},format=qcow2,if=virtio",
-
-            "-device",
-            "virtio-vga",
-
-            "-nic",
-            "user,model=virtio",
-
-            "-display",
-            "sdl"
-        ]
-
-        if os.path.isfile(iso):
-            command.extend([
-                "-cdrom",
-                iso
-            ])
-
-        self.write_log(
-            "Iniciando PC Virtual..."
-        )
-
-        self.write_log(
-            " ".join(command)
-        )
-
-        try:
-            self.process = subprocess.Popen(
-                command
-            )
-
-            self.status_var.set(
-                "PC Virtual em execução"
-            )
-
-            threading.Thread(
-                target=self.wait_for_vm,
-                daemon=True
-            ).start()
-
-        except FileNotFoundError:
-            messagebox.showerror(
-                APP_NAME,
-                "QEMU não foi encontrado.\n\n"
-                "Instale o QEMU e coloque "
-                "qemu-system-x86_64.exe no PATH."
-            )
-
-            self.status_var.set(
-                "QEMU não encontrado"
-            )
-
-        except Exception as error:
-            messagebox.showerror(
-                APP_NAME,
-                f"Erro ao iniciar:\n{error}"
-            )
-
-            self.status_var.set(
-                "Erro"
-            )
-
-    def wait_for_vm(self):
-        code = self.process.wait()
-
-        self.root.after(
-            0,
-            lambda: self.status_var.set(
-                f"PC Virtual encerrado ({code})"
-            )
-        )
-
-        self.root.after(
-            0,
-            lambda: self.write_log(
-                f"QEMU encerrado. Código: {code}"
-            )
-        )
-
-    def stop_vm(self):
-        if (
-            self.process
-            and self.process.poll() is None
-        ):
-            self.write_log(
-                "Solicitando encerramento..."
-            )
-
-            self.process.terminate()
-
-            self.status_var.set(
-                "Encerrando PC Virtual..."
-            )
-
-        else:
-            self.status_var.set(
-                "Nenhuma máquina virtual executando"
-            )
-
-
-def main():
-    root = tk.Tk()
-
-    try:
-        ttk.Style().theme_use("vista")
-    except Exception:
-        pass
-
-    PCVirtualGames(root)
-
-    root.mainloop()
-
-
-if __name__ == "__main__":
-    main()
+name: PC Virtual Games - Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build PC Virtual Games
+    runs-on: windows-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Atualizar pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Instalar dependências
+        run: |
+          pip install pyinstaller
+
+      - name: Verificar Python
+        run: |
+          python --version
+          pyinstaller --version
+
+      - name: Criar executável
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --windowed `
+            --name PCVirtualGames `
+            src/main.py
+
+      - name: Copiar configuração
+        run: |
+          Copy-Item config.json dist/config.json
+
+      - name: Criar ZIP
+        run: |
+          Compress-Archive `
+            -Path dist/PCVirtualGames.exe,dist/config.json `
+            -DestinationPath PCVirtualGames-Windows.zip
+
+      - name: Publicar build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PCVirtualGames-Windows
+          path: PCVirtualGames-Windows.zip
